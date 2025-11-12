@@ -1,0 +1,12 @@
+%{
+  "abit": {:hex, :abit, "0.3.3", "cef01acd96ed34f97d2c1f0955d28cd8474a6169e5b5eb1ef9e40c39617c03a6", [:mix], [], "hexpm", "dc1348113b12b963f5c3697cdb972bdfbe5df90741d2d82d5c24c72d4f57bf2f"},
+  "benchee": {:hex, :benchee, "1.5.0", "4d812c31d54b0ec0167e91278e7de3f596324a78a096fd3d0bea68bb0c513b10", [:mix], [{:deep_merge, "~> 1.0", [hex: :deep_merge, repo: "hexpm", optional: false]}, {:statistex, "~> 1.1", [hex: :statistex, repo: "hexpm", optional: false]}, {:table, "~> 0.1.0", [hex: :table, repo: "hexpm", optional: true]}], "hexpm", "5b075393aea81b8ae74eadd1c28b1d87e8a63696c649d8293db7c4df3eb67535"},
+  "cuckoo_filter": {:hex, :cuckoo_filter, "1.0.1", "4c0fef718f94f43d2e30cc7286183bb02434bae5dd392174c4de188325333d23", [:rebar3], [{:spinlock, "0.2.1", [hex: :spinlock, repo: "hexpm", optional: false]}], "hexpm", "6dd0814057addef8f40c38ba7cf52f99fb7ddbebe22e6c30b0f340a57cf63a5e"},
+  "deep_merge": {:hex, :deep_merge, "1.0.0", "b4aa1a0d1acac393bdf38b2291af38cb1d4a52806cf7a4906f718e1feb5ee961", [:mix], [], "hexpm", "ce708e5f094b9cd4e8f2be4f00d2f4250c4095be93f8cd6d018c753894885430"},
+  "murmur": {:hex, :murmur, "2.0.0", "ffd64af879014b51c449aec38e2d460547270b88280f052cecda0a0ce4589188", [:mix], [], "hexpm", "2e96baf65a1a8b5af82ee509d6089ddf717af7e8ce0ed80d4c53819ca2fc2ffd"},
+  "spinlock": {:hex, :spinlock, "0.2.1", "0b19c946ee7c3f005b1ff856f712352540095dd823ee03f5352d9818602e9d60", [:rebar3], [], "hexpm", "1a7fa7efd642c1d36ec253d3c6ef6a50863b3e934318404a29f418564d68981b"},
+  "statistex": {:hex, :statistex, "1.1.0", "7fec1eb2f580a0d2c1a05ed27396a084ab064a40cfc84246dbfb0c72a5c761e5", [:mix], [], "hexpm", "f5950ea26ad43246ba2cce54324ac394a4e7408fdcf98b8e230f503a0cba9cf5"},
+  "talan": {:hex, :talan, "0.2.0", "06256d6cc3f6fd0d7a075acc8c0b152536adc3d49321caae71bda9effab1f8ca", [:mix], [{:abit, "~> 0.3.3", [hex: :abit, repo: "hexpm", optional: false]}, {:murmur, "~> 2.0", [hex: :murmur, repo: "hexpm", optional: false]}], "hexpm", "9f71b0bbb9d812d2b19ce2012a2d4fc45eaf8ccbfc50a8c18ab2eaf3828cd696"},
+  "xxh3": {:hex, :xxh3, "0.3.6", "79f4ac59120dc18cedcd1c31db0108141e1b07bd4b64655400b24a7f11386994", [:rebar3], [], "hexpm", "6009d066bed9a0327f01227bf22409740b134a14301307e6c96e57c1b6464dac"},
+  "xxhash": {:hex, :xxhash, "0.3.1", "0e978aeba3d7ea0f53b88c5c975a0bee8e873856f0daad9764f9e5e7b60c8d17", [:mix], [], "hexpm", "14fef02f550c1b393de52912f7ef4ce53b5749c63db70ffdc6582474e625513c"},
+}
