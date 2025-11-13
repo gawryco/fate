@@ -5,6 +5,10 @@
 [![CI](https://github.com/YOUR_USERNAME/fate/workflows/CI/badge.svg)](https://github.com/gawryco/fate/actions)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-green)](https://github.com/gawryco/fate)
 
+<p align="center">
+  <img src="docs/assets/fate-logo.png" alt="Fate logo" width="260">
+</p>
+
 **High-performance probabilistic data structures for Elixir**
 
 Fate provides concurrent, space-efficient implementations of probabilistic data structures backed by `:atomics` for thread-safe operations. Perfect for membership testing, cardinality estimation, and frequency counting at scale.
