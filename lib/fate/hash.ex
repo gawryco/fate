@@ -188,15 +188,14 @@ defmodule Fate.Hash do
     @impl Fate.Hash
     def hash(term, seed) do
       data = :erlang.term_to_binary({seed, term})
+      fnv1a64(data, @offset_basis)
+    end
 
-      data
-      |> :erlang.binary_to_list()
-      |> Enum.reduce(@offset_basis, fn byte, acc ->
-        acc
-        |> bxor(byte)
-        |> Kernel.*(@prime)
-        |> band(@mask)
-      end)
+    defp fnv1a64(<<>>, hash), do: hash
+
+    defp fnv1a64(<<byte::unsigned-integer-size(8), rest::binary>>, hash) do
+      updated = ((bxor(hash, byte)) * @prime) &&& @mask
+      fnv1a64(rest, updated)
     end
   end
 
