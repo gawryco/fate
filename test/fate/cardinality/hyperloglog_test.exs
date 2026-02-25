@@ -183,4 +183,77 @@ defmodule Fate.Cardinality.HyperLogLogTest do
 
     assert_in_delta HyperLogLog.cardinality(hll_add), HyperLogLog.cardinality(hll_hashed), 20
   end
+
+  # --- HLL++ mode tests ---
+
+  test "creates HyperLogLog with mode :hll_plus" do
+    hll = HyperLogLog.new(mode: :hll_plus)
+    assert hll.mode == :hll_plus
+    assert hll.precision == 14
+  end
+
+  test "validates mode option" do
+    assert_raise ArgumentError, ~r/mode must be/, fn ->
+      HyperLogLog.new(mode: :invalid)
+    end
+  end
+
+  test "HLL++ estimates small cardinalities accurately" do
+    for n <- [10, 25, 50, 75, 100] do
+      hll = HyperLogLog.new(precision: 14, mode: :hll_plus, hash_module: Fate.Hash.FNV1a)
+      Enum.each(1..n, &HyperLogLog.add(hll, &1))
+      estimate = HyperLogLog.cardinality(hll)
+      error = abs(estimate - n) / n
+
+      assert error < 0.20,
+             "HLL++ at n=#{n}: expected ~#{n}, got #{estimate} (#{Float.round(error * 100, 1)}% error)"
+    end
+  end
+
+  test "HLL++ estimates medium cardinalities near threshold" do
+    hll = HyperLogLog.new(precision: 12, mode: :hll_plus, hash_module: Fate.Hash.FNV1a)
+    Enum.each(1..1000, &HyperLogLog.add(hll, &1))
+    estimate = HyperLogLog.cardinality(hll)
+    assert_in_delta estimate, 1000, 200
+  end
+
+  test "HLL++ handles large cardinalities" do
+    hll = HyperLogLog.new(precision: 14, mode: :hll_plus, hash_module: Fate.Hash.Default)
+
+    Enum.each(1..10_000, fn i ->
+      HyperLogLog.add(hll, i)
+    end)
+
+    cardinality = HyperLogLog.cardinality(hll)
+    assert cardinality >= 9_000 and cardinality <= 11_000
+  end
+
+  test "HLL++ works across all supported precisions" do
+    for p <- 4..18 do
+      hll = HyperLogLog.new(precision: p, mode: :hll_plus, hash_module: Fate.Hash.FNV1a)
+      Enum.each(1..50, &HyperLogLog.add(hll, &1))
+      estimate = HyperLogLog.cardinality(hll)
+      assert estimate > 0, "precision #{p} returned non-positive estimate"
+    end
+  end
+
+  test "merge raises when modes differ" do
+    hll1 = HyperLogLog.new(precision: 12, mode: :hll, hash_module: Fate.Hash.Default)
+    hll2 = HyperLogLog.new(precision: 12, mode: :hll_plus, hash_module: Fate.Hash.Default)
+
+    assert_raise ArgumentError, ~r/must share precision/, fn ->
+      HyperLogLog.merge([hll1, hll2])
+    end
+  end
+
+  test "serialize and deserialize preserve mode" do
+    hll = HyperLogLog.new(precision: 12, mode: :hll_plus, hash_module: Fate.Hash.Default)
+    Enum.each(1..50, &HyperLogLog.add(hll, &1))
+
+    binary = HyperLogLog.serialize(hll)
+    restored = HyperLogLog.deserialize(binary)
+
+    assert restored.mode == :hll_plus
+    assert HyperLogLog.cardinality(restored) == HyperLogLog.cardinality(hll)
+  end
 end
