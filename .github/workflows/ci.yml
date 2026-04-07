@@ -62,7 +62,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload coverage HTML
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: matrix.elixir == '1.19' && matrix.otp == '28'
         with:
           name: coverage-report
