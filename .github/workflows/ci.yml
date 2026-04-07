@@ -13,12 +13,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: "1.17"
-            otp: "27"
+          - elixir: "1.19"
+            otp: "28"
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
@@ -33,7 +33,7 @@ jobs:
           toolchain: stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             deps
@@ -54,16 +54,16 @@ jobs:
         run: mix coveralls.html
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
-          file: ./cover/excoveralls.json
+          files: ./cover/excoveralls.json
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
 
       - name: Upload coverage HTML
-        uses: actions/upload-artifact@v4
-        if: matrix.elixir == '1.17' && matrix.otp == '27'
+        uses: actions/upload-artifact@v6
+        if: matrix.elixir == '1.19' && matrix.otp == '28'
         with:
           name: coverage-report
           path: cover/excoveralls.html
@@ -73,13 +73,13 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: "1.17"
-          otp-version: "27"
+          elixir-version: "1.19"
+          otp-version: "28"
 
       - name: Install Rust (for xxh3 NIF)
         uses: dtolnay/rust-toolchain@stable
@@ -87,7 +87,7 @@ jobs:
           toolchain: stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             deps
@@ -106,4 +106,3 @@ jobs:
 
       - name: Compile with warnings as errors
         run: mix compile --warnings-as-errors
-

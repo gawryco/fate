@@ -23,10 +23,21 @@ defmodule Fate.Cardinality.HyperLogLog do
   - Uses 64-bit hash to avoid large range correction (as suggested in "HyperLogLog in Practice")
   - Improved raw estimation algorithm for better accuracy
 
+  It supports two modes:
+
+  - `:hll` (default) — standard HyperLogLog from Flajolet et al. (2007)
+  - `:hll_plus` — HyperLogLog++ from Heule et al. (2013) with empirical bias correction
+    for improved accuracy at small-to-medium cardinalities
+
+  Both modes use 64-bit hashes to avoid large range correction.
+
   ## Examples
 
       # Create a HyperLogLog with default precision (14)
       hll = HyperLogLog.new()
+
+      # Create a HyperLogLog++ with bias correction
+      hll_plus = HyperLogLog.new(mode: :hll_plus)
 
       # Add elements
       HyperLogLog.add(hll, "user:123")
@@ -59,19 +70,24 @@ defmodule Fate.Cardinality.HyperLogLog do
   import Bitwise
 
   alias Fate.Hash
+  alias Fate.Cardinality.HyperLogLog.BiasData
+
+  @type mode :: :hll | :hll_plus
 
   @type t :: %__MODULE__{
           atomics: :atomics.atomics_ref(),
           precision: pos_integer(),
           register_count: pos_integer(),
-          hash_module: module()
+          hash_module: module(),
+          mode: mode()
         }
 
   defstruct [
     :atomics,
     :precision,
     :register_count,
-    :hash_module
+    :hash_module,
+    mode: :hll
   ]
 
   @default_precision 14
@@ -92,6 +108,7 @@ defmodule Fate.Cardinality.HyperLogLog do
     * `:precision` – number of bits for register addressing (4-18, default #{@default_precision}).
       Higher precision = better accuracy but more memory.
     * `:hash_module` – module implementing `Fate.Hash` (auto-selected when omitted).
+    * `:mode` – `:hll` (default) or `:hll_plus` for HyperLogLog++ with bias correction.
   """
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -102,6 +119,7 @@ defmodule Fate.Cardinality.HyperLogLog do
 
     register_count = 1 <<< precision
     hash_module = Keyword.get(opts, :hash_module, Hash.module())
+    mode = opts |> Keyword.get(:mode, :hll) |> validate_mode!()
 
     unless Hash.available?(hash_module) do
       raise ArgumentError, "hash module #{inspect(hash_module)} is not available"
@@ -116,7 +134,8 @@ defmodule Fate.Cardinality.HyperLogLog do
       atomics: atomics,
       precision: precision,
       register_count: register_count,
-      hash_module: hash_module
+      hash_module: hash_module,
+      mode: mode
     }
   end
 
@@ -233,8 +252,12 @@ defmodule Fate.Cardinality.HyperLogLog do
     # Calculate raw estimate using harmonic mean
     raw_estimate = raw_estimate(hll)
 
-    # Apply bias correction for small cardinalities
-    corrected = apply_bias_correction(hll, raw_estimate)
+    # Apply bias correction based on mode
+    corrected =
+      case hll.mode do
+        :hll -> apply_bias_correction(hll, raw_estimate)
+        :hll_plus -> apply_bias_correction_plus(hll, raw_estimate)
+      end
 
     max(round(corrected), 0)
   end
@@ -276,7 +299,8 @@ defmodule Fate.Cardinality.HyperLogLog do
       precision: hll.precision,
       register_count: hll.register_count,
       hash_module: hll.hash_module,
-      registers: registers
+      registers: registers,
+      mode: hll.mode
     }
 
     :erlang.term_to_binary({:fate_hll, 1, data})
@@ -289,7 +313,9 @@ defmodule Fate.Cardinality.HyperLogLog do
   def deserialize(binary) when is_binary(binary) do
     {:fate_hll, 1, data} = :erlang.binary_to_term(binary)
 
-    hll = new(precision: data.precision, hash_module: data.hash_module)
+    # Backwards compat: default to :hll if mode key is missing from older serialized data
+    mode = Map.get(data, :mode, :hll)
+    hll = new(precision: data.precision, hash_module: data.hash_module, mode: mode)
 
     Enum.with_index(data.registers)
     |> Enum.each(fn {value, idx} ->
@@ -458,20 +484,20 @@ defmodule Fate.Cardinality.HyperLogLog do
   defp count_if_zero(_), do: 0
 
   defp empty_like(%__MODULE__{} = hll) do
-    new(precision: hll.precision, hash_module: hll.hash_module)
+    new(precision: hll.precision, hash_module: hll.hash_module, mode: hll.mode)
   end
 
   defp ensure_compatible!(hlls, reference) do
     Enum.each(hlls, fn hll ->
       unless compatible?(hll, reference) do
         raise ArgumentError,
-              "HyperLogLog sketches must share precision and hash_module for merging"
+              "HyperLogLog sketches must share precision, hash_module, and mode for merging"
       end
     end)
   end
 
   defp compatible?(a, b) do
-    a.precision == b.precision and a.hash_module == b.hash_module
+    a.precision == b.precision and a.hash_module == b.hash_module and a.mode == b.mode
   end
 
   defp validate_precision!(precision)
@@ -483,5 +509,117 @@ defmodule Fate.Cardinality.HyperLogLog do
   defp validate_precision!(_) do
     raise ArgumentError,
           "precision must be an integer between #{@min_precision} and #{@max_precision}"
+  end
+
+  defp validate_mode!(:hll), do: :hll
+  defp validate_mode!(:hll_plus), do: :hll_plus
+
+  defp validate_mode!(_) do
+    raise ArgumentError, "mode must be :hll or :hll_plus"
+  end
+
+  # HLL++ bias correction (Heule et al. 2013)
+  defp apply_bias_correction_plus(%__MODULE__{} = hll, raw_estimate) do
+    m = hll.register_count
+    p = hll.precision
+
+    # Step 1: Bias-corrected estimate for small cardinalities
+    e_prime =
+      if raw_estimate <= 5.0 * m do
+        raw_estimate - estimate_bias(raw_estimate, p)
+      else
+        raw_estimate
+      end
+
+    # Step 2: Check zero registers for linear counting
+    zero_count = count_zero_registers(hll, 0, 0)
+
+    if zero_count > 0 do
+      h = m * :math.log(m / zero_count)
+
+      if h <= BiasData.threshold(p) do
+        h
+      else
+        e_prime
+      end
+    else
+      e_prime
+    end
+  end
+
+  # Estimate bias using k-nearest-neighbor averaging over the empirical tables,
+  # as described in Heule et al. (2013) Section 5. Finds the 6 entries in
+  # rawEstimateData closest to the raw estimate and averages their corresponding
+  # biasData values.
+  #
+  # Since the table is approximately sorted, we binary search to find the nearest
+  # index, then expand outward to collect k=6 neighbors. O(log n + k) instead of
+  # O(n log n) for a full sort.
+  @knn_k 6
+
+  defp estimate_bias(raw_estimate, precision) do
+    raw_estimates = BiasData.raw_estimates(precision)
+    biases = BiasData.biases(precision)
+    size = BiasData.table_size(precision)
+
+    k = min(@knn_k, size)
+
+    # Binary search for the closest index
+    center = binary_search_closest(raw_estimates, raw_estimate, size)
+
+    # Expand outward from center to collect k nearest neighbors
+    indices = knn_expand(raw_estimates, raw_estimate, center, k, size)
+
+    # Average the bias values at those indices
+    sum = Enum.reduce(indices, 0.0, fn i, acc -> acc + elem(biases, i) end)
+    sum / k
+  end
+
+  # Binary search for the index of the closest value in a sorted tuple.
+  defp binary_search_closest(tuple, value, size) do
+    do_bsearch(tuple, value, 0, size - 1)
+  end
+
+  defp do_bsearch(tuple, value, low, high) when high - low <= 1 do
+    d_low = abs(elem(tuple, low) - value)
+    d_high = abs(elem(tuple, high) - value)
+    if d_low <= d_high, do: low, else: high
+  end
+
+  defp do_bsearch(tuple, value, low, high) do
+    mid = div(low + high, 2)
+
+    if elem(tuple, mid) < value do
+      do_bsearch(tuple, value, mid, high)
+    else
+      do_bsearch(tuple, value, low, mid)
+    end
+  end
+
+  # Expand outward from center to collect k nearest indices by distance.
+  # Uses two pointers moving left and right from center.
+  defp knn_expand(tuple, value, center, k, size) do
+    do_knn_expand(tuple, value, center - 1, center, k, size, [])
+  end
+
+  defp do_knn_expand(_tuple, _value, _left, _right, 0, _size, acc), do: acc
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) when left < 0 do
+    do_knn_expand(tuple, value, left, right + 1, remaining - 1, size, [right | acc])
+  end
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) when right >= size do
+    do_knn_expand(tuple, value, left - 1, right, remaining - 1, size, [left | acc])
+  end
+
+  defp do_knn_expand(tuple, value, left, right, remaining, size, acc) do
+    d_left = abs(elem(tuple, left) - value)
+    d_right = abs(elem(tuple, right) - value)
+
+    if d_left <= d_right do
+      do_knn_expand(tuple, value, left - 1, right, remaining - 1, size, [left | acc])
+    else
+      do_knn_expand(tuple, value, left, right + 1, remaining - 1, size, [right | acc])
+    end
   end
 end
