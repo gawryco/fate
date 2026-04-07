@@ -53,7 +53,7 @@ defmodule Fate.MixProject do
       {:excoveralls, "~> 0.18", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:hll, "~> 0.1", only: :dev, optional: true},
-      {:hypex, "~> 1.1", only: :dev, optional: true},
+      {:hypex, "~> 2.1", only: :dev, optional: true},
       {:xxh3, "~> 0.3", optional: true},
       {:xxhash, "~> 0.3", optional: true},
       {:murmur, "~> 2.0", optional: true}
